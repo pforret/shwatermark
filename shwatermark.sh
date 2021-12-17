@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-### ==============================================================================
-### SO HOW DO YOU PROCEED WITH YOUR SCRIPT?
-### 1. define the options/parameters and defaults you need in list_options()
-### 2. define dependencies on other programs/scripts in list_dependencies()
-### 3. implement the different actions in main() with helper functions
-### 4. implement helper functions you defined in previous step
-### ==============================================================================
-
 ### Created by Peter Forret ( pforret ) on 2021-12-17
 ### Based on https://github.com/pforret/bashew 1.16.6
 script_version="0.0.1" # if there is a VERSION.md in this script's folder, it will take priority for version number
@@ -15,25 +7,8 @@ readonly script_created="2021-12-17"
 readonly run_as_root=-1 # run_as_root: 0 = don't check anything / 1 = script MUST run as root / -1 = script MAY NOT run as root
 
 list_options() {
-  ### Change the next lines to reflect which flags/options/parameters you need
-  ### flag:   switch a flag 'on' / no value specified
-  ###     flag|<short>|<long>|<description>
-  ###     e.g. "-v" or "--verbose" for verbose output / default is always 'off'
-  ###     will be available as $<long> in the script e.g. $verbose
-  ### option: set an option / 1 value specified
-  ###     option|<short>|<long>|<description>|<default>
-  ###     e.g. "-e <extension>" or "--extension <extension>" for a file extension
-  ###     will be available a $<long> in the script e.g. $extension
-  ### list: add an list/array item / 1 value specified
-  ###     list|<short>|<long>|<description>| (default is ignored)
-  ###     e.g. "-u <user1> -u <user2>" or "--user <user1> --user <user2>"
-  ###     will be available a $<long> array in the script e.g. ${user[@]}
-  ### param:  comes after the options
-  ###     param|<type>|<long>|<description>
-  ###     <type> = 1 for single parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = ? for optional parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = n for list parameter    - e.g. param|n|inputs expects <input1> <input2> ... <input99>
-  ###     will be available as $<long> in the script after option/param parsing
+  default_tags="$(date +%Y)"
+  username="$(whoami)"
   echo -n "
 #commented lines will be filtered
 flag|h|help|show usage
@@ -42,8 +17,29 @@ flag|v|verbose|output more
 flag|f|force|do not ask for confirmation (always yes)
 option|l|log_dir|folder for log files |$HOME/log/$script_prefix
 option|t|tmp_dir|folder for temp files|/tmp/$script_prefix
-param|1|action|action to perform: action1/action2
-param|?|input|input file/text
+
+option|i|input|input folder|.
+option|e|output|output folder|./export
+option|I|inexts|input extensions|jpg,jpeg,JPG
+option|E|outexts|output extensions|jpg
+
+option|A|alpha|watermark alpha opacity|80
+option|C|color|watermark color|FFF
+option|F|font|watermark font|Helvetica
+option|M|mark|watermark text|{name}
+option|O|position|watermark position|SouthWest
+option|S|size|watermark font size|20
+option|X|fx|watermark effect|shadow
+
+option|E|email|email of photographer (EXIF)|
+option|P|name|name of photographer (EXIF)|$username
+option|S|shoot|shoot/event name (EXIF)|
+option|T|tags|shoot/event tags (EXIF)|$default_tags
+option|U|url|photographer url (EXIF)|
+
+option|p|pixel|max pixel dimension|1600
+option|q|quality|export quality %|95
+param|1|action|action to perform: export/modify
 " | grep -v '^#' | grep -v '^\s*$'
 }
 
@@ -56,19 +52,18 @@ main() {
 
   action=$(lower_case "$action")
   case $action in
-  action1)
-    #TIP: use «$script_prefix action1» to ...
-    #TIP:> $script_prefix action1 input.txt
+  export)
+    #TIP: use «$script_prefix export» to export photos
+    #TIP:> $script_prefix export
     # shellcheck disable=SC2154
-    do_action1 "$input"
+    do_export
     ;;
 
-  action2)
-    #TIP: use «$script_prefix action2» to ...
-    #TIP:> $script_prefix action2 input.txt output.pdf
-
+  modify)
+    #TIP: use «$script_prefix modify» to modify photos in place
+    #TIP:> $script_prefix modify
     # shellcheck disable=SC2154
-    do_action2 "$input" "$output"
+    do_modify
     ;;
 
   check|env)
@@ -100,16 +95,16 @@ main() {
 ## Put your helper scripts here
 #####################################################################
 
-do_action1() {
-  log_to_file "action1 [$input]"
+do_export() {
+  log_to_file "export [$input]"
   # Examples of required binaries/scripts and how to install them
   # require_binary "convert" "imagemagick"
   # require_binary "progressbar" "basher install pforret/progressbar"
   # (code)
 }
 
-do_action2() {
-  log_to_file "action2 [$input]"
+do_modify() {
+  log_to_file "modify [$input]"
   # (code)
 
 }
