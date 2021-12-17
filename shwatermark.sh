@@ -1,268 +1,77 @@
 #!/usr/bin/env bash
+### ==============================================================================
+### SO HOW DO YOU PROCEED WITH YOUR SCRIPT?
+### 1. define the options/parameters and defaults you need in list_options()
+### 2. define dependencies on other programs/scripts in list_dependencies()
+### 3. implement the different actions in main() with helper functions
+### 4. implement helper functions you defined in previous step
+### ==============================================================================
+
+### Created by Peter Forret ( pforret ) on 2021-12-17
+### Based on https://github.com/pforret/bashew 1.16.6
 script_version="0.0.1" # if there is a VERSION.md in this script's folder, it will take priority for version number
 readonly script_author="peter@forret.com"
-readonly script_created="2020-08-05"
+readonly script_created="2021-12-17"
 readonly run_as_root=-1 # run_as_root: 0 = don't check anything / 1 = script MUST run as root / -1 = script MAY NOT run as root
 
 list_options() {
+  ### Change the next lines to reflect which flags/options/parameters you need
+  ### flag:   switch a flag 'on' / no value specified
+  ###     flag|<short>|<long>|<description>
+  ###     e.g. "-v" or "--verbose" for verbose output / default is always 'off'
+  ###     will be available as $<long> in the script e.g. $verbose
+  ### option: set an option / 1 value specified
+  ###     option|<short>|<long>|<description>|<default>
+  ###     e.g. "-e <extension>" or "--extension <extension>" for a file extension
+  ###     will be available a $<long> in the script e.g. $extension
+  ### list: add an list/array item / 1 value specified
+  ###     list|<short>|<long>|<description>| (default is ignored)
+  ###     e.g. "-u <user1> -u <user2>" or "--user <user1> --user <user2>"
+  ###     will be available a $<long> array in the script e.g. ${user[@]}
+  ### param:  comes after the options
+  ###     param|<type>|<long>|<description>
+  ###     <type> = 1 for single parameters - e.g. param|1|output expects 1 parameter <output>
+  ###     <type> = ? for optional parameters - e.g. param|1|output expects 1 parameter <output>
+  ###     <type> = n for list parameter    - e.g. param|n|inputs expects <input1> <input2> ... <input99>
+  ###     will be available as $<long> in the script after option/param parsing
   echo -n "
 #commented lines will be filtered
 flag|h|help|show usage
 flag|q|quiet|no output
 flag|v|verbose|output more
 flag|f|force|do not ask for confirmation (always yes)
-option|l|log_dir|folder for debug files |$HOME/log/$script_prefix
+option|l|log_dir|folder for log files |$HOME/log/$script_prefix
 option|t|tmp_dir|folder for temp files|/tmp/$script_prefix
-option|n|name|name of new script or project
-param|1|action|action to perform: script/project/init/update
-" | grep -v '^#'
+param|1|action|action to perform: action1/action2
+param|?|input|input file/text
+" | grep -v '^#' | grep -v '^\s*$'
 }
 
-list_examples() {
-  echo -n "
-$script_basename script  : create new (stand-alone) script (interactive)
-$script_basename project : create new bash script repo (interactive)
-$script_basename init    : initialize this repo as a new project (when generated from the 'bashew' template repo)
-$script_basename update  : update $script_basename to latest version (git pull)
-" | grep -v '^$'
-}
-## Put your helper scripts here
-get_author_data() {
-  # $1 = proposed script/project name
-
-  ## always have something as author data
-  guess_fullname="$(whoami)"
-  guess_username="$guess_fullname"
-  guess_email="$guess_fullname@$(hostname)"
-
-  # if there is prior data, use that
-  [[ -n ${BASHEW_AUTHOR_FULLNAME:-} ]] && guess_fullname="$BASHEW_AUTHOR_FULLNAME"
-  [[ -n ${BASHEW_AUTHOR_EMAIL:-} ]] && guess_email="$BASHEW_AUTHOR_EMAIL"
-  [[ -n ${BASHEW_AUTHOR_USERNAME:-} ]] && guess_username="$BASHEW_AUTHOR_USERNAME"
-
-  # if there is git config data, use that
-  # shellcheck disable=SC2154
-  if [[ -n "$git_repo_root" ]]; then
-    guess_fullname=$(git config user.name)
-    guess_email=$(git config user.email)
-    guess_username=$(git config remote.origin.url | cut -d: -f2)
-    # git@github.com:pforret/bashew.git => pforret/bashew.git
-    guess_username=$(dirname "$guess_username")
-    # pforret/bashew.git => pforret
-    guess_username=$(basename "$guess_username")
-  fi
-
-  if ((force)); then
-    author_fullname="$guess_fullname"
-    author_email="$guess_email"
-    author_username="$guess_username"
-    new_name="$1"
-    clean_name=$(basename "$new_name" .sh)
-    new_description="This is my script $clean_name"
-  else
-    announce "1. first we need the information of the author"
-    author_fullname=$(ask "Author full name        " "$guess_fullname")
-    author_email=$(ask "Author email            " "$guess_email")
-    author_username=$(ask "Author (github) username" "$guess_username")
-    export BASHEW_AUTHOR_FULLNAME="$author_fullname"
-    export BASHEW_AUTHOR_EMAIL="$author_email"
-    export BASHEW_AUTHOR_USERNAME="$author_username"
-
-    announce "2. now we need the path and name of this new script/repo"
-    new_name=$(ask "Script name" "$1")
-
-    announce "3. give some description of what the script should do"
-    clean_name=$(basename "$new_name" .sh)
-    new_description=$(ask "Script description" "This is my script $clean_name")
-  fi
-}
-
-copy_and_replace() {
-  local input="$1"
-  local output="$2"
-
-  if [[ ! -f "$input" ]]; then
-    return 0
-  fi
-  awk \
-    -v author_fullname="$author_fullname" \
-    -v author_username="$author_username" \
-    -v author_email="$author_email" \
-    -v package_name="$clean_name" \
-    -v package_description="$new_description" \
-    -v meta_today="$execution_day" \
-    -v meta_year="$execution_year" \
-    -v bashew_version="$script_version" \
-    '{
-    gsub(/author_name/,author_fullname);
-    gsub(/author_username/,author_username);
-    gsub(/author@email.com/,author_email);
-    gsub(/package_name/,package_name);
-    gsub(/package_description/,package_description);
-    gsub(/meta_today/,meta_today);
-    gsub(/meta_year/,meta_year);
-    gsub(/bashew_version/,bashew_version);
-    print;
-    }' \
-    <"$input" \
-    >"$output"
-}
-
-random_word() {
-  (
-    if aspell -v >/dev/null 2>&1; then
-      aspell -d en dump master | aspell -l en expand
-    elif [[ -f /usr/share/dict/words ]]; then
-      # works on MacOS
-      cat /usr/share/dict/words
-    elif [[ -f /usr/dict/words ]]; then
-      cat /usr/dict/words
-    else
-      printf 'zero,one,two,three,four,five,six,seven,eight,nine,ten,alfa,bravo,charlie,delta,echo,foxtrot,golf,hotel,india,juliet,kilo,lima,mike,november,oscar,papa,quebec,romeo,sierra,tango,uniform,victor,whiskey,xray,yankee,zulu%.0s' {1..3000} |
-        tr ',' "\n"
-    fi
-  ) |
-    awk 'length($1) > 2 && length($1) < 8 {print}' |
-    grep -v "'" |
-    grep -v " " |
-    awk "NR == $RANDOM {print tolower(\$0)}"
-}
-
-delete_stuff() {
-  if [[ -d "$1" ]]; then
-    debug "Delete folder [$1]"
-    rm -fr "$1"
-  fi
-  if [[ -f "$1" ]]; then
-    debug "Delete file [$1]"
-    rm "$1"
-  fi
-}
+#####################################################################
+## Put your main script here
+#####################################################################
 
 main() {
-  debug "Program: $script_basename $script_version"
-  debug "Updated: $script_modified"
-  debug "Run as : $USER@$HOSTNAME"
-  # add programs you need in your script here, like tar, wget, ffmpeg, rsync ...
-  require_binary tput
-  require_binary uname
-  require_binary git
-  local model="script"
+  log_to_file "[$script_basename] $script_version started"
 
   action=$(lower_case "$action")
   case $action in
-  script | new)
-    if [[ -n "${name:-}" ]] && [[ ! "$name" == " " ]]; then
-      debug "Using [$name] as name"
-      get_author_data "$name"
-    else
-      random_name="$(random_word)_$(random_word).sh"
-      debug "Using [$random_name] as name"
-      get_author_data "./$random_name"
-    fi
-    announce "Creating script $new_name ..."
+  action1)
+    #TIP: use «$script_prefix action1» to ...
+    #TIP:> $script_prefix action1 input.txt
     # shellcheck disable=SC2154
-    copy_and_replace "$script_install_folder/template/$model.sh" "$new_name"
-    chmod +x "$new_name"
-    echo "$new_name"
+    do_action1 "$input"
     ;;
 
-  project)
-    if [[ -n "${name:-}" ]] && [[ ! "$name" == " " ]]; then
-      get_author_data "$name"
-    else
-      random_name="$(random_word)_$(random_word)"
-      get_author_data "./$random_name"
-    fi
-    if [[ ! -d "$new_name" ]]; then
-      announce "Creating project $new_name ..."
-      mkdir "$new_name"
-      template_folder="$script_install_folder/template"
-      ## first do all files that can change
-      for file in "$template_folder"/*.md "$template_folder/LICENSE" "$template_folder"/.gitignore "$template_folder"/.env.example; do
-        bfile=$(basename "$file")
-        ((quiet)) || echo -n "$bfile "
-        new_file="$new_name/$bfile"
-        copy_and_replace "$file" "$new_file"
-      done
-      ((quiet)) || echo -n "$clean_name.sh "
-      copy_and_replace "$template_folder/$model.sh" "$new_name/$clean_name.sh"
-      chmod +x "$new_name/$clean_name.sh"
-      ## now the CI/CD files
-      if [[ -f "$template_folder/bitbucket-pipelines.yml" ]]; then
-        ((quiet)) || echo -n "bitbucket-pipelines "
-        cp "$template_folder/bitbucket-pipelines.yml" "$new_name/"
-      fi
-      if [[ -d "$template_folder/.github" ]]; then
-        ((quiet)) || echo -n ".github "
-        cp -r "$template_folder/.github" "$new_name/.github"
-      fi
+  action2)
+    #TIP: use «$script_prefix action2» to ...
+    #TIP:> $script_prefix action2 input.txt output.pdf
 
-      ((quiet)) || echo " "
-      if confirm "Do you want to 'git init' the new project?"; then
-        (pushd "$new_name" && git init && git add . && popd || return) >/dev/null 2>&1
-      fi
-      success "next step: 'cd $new_name' and start scripting!"
-    else
-      alert "Folder [$new_name] already exists, cannot make a new project there"
-    fi
-    ;;
-
-  init)
-    repo_name=$(basename "$script_install_folder")
-    [[ "$repo_name" == "bashew" ]] && die "You can only run the '$script_basename init' of a *new* repo, derived from the bashew template on Github."
-    [[ ! -d ".git" ]] && die "You can only run '$script_basename init' in the root of your repo"
-    [[ ! -d "template" ]] && die "The 'template' folder seems to be missing, are you sure this repo is freshly cloned from pforret/bashew?"
-    [[ ! -f "$script_install_folder/template/$model.sh" ]] && die "$model.sh is not a valid template"
-    new_name="$repo_name.sh"
-    get_author_data "./$new_name"
-    announce "Creating script $new_name ..."
     # shellcheck disable=SC2154
-    for file in template/*.md template/LICENSE template/.gitignore template/.gitignore; do
-      bfile=$(basename "$file")
-      ((quiet)) || echo -n "$bfile "
-      new_file="./$bfile"
-      rm -f "$new_file"
-      copy_and_replace "$file" "$new_file"
-    done
-    copy_and_replace "$script_install_folder/template/$model.sh" "$new_name"
-    chmod +x "$new_name"
-    git add "$new_name"
-    alt_dir=$(dirname "$new_name")
-    alt_base=$(basename "$new_name" .sh)
-    alt_name="$alt_dir/$alt_base"
-    if [[ ! "$alt_name" == "$new_name" ]]; then
-      # create a "do_this" alias for "do_this.sh"
-      ln -s "$new_name" "$alt_name"
-      git add "$alt_name"
-    fi
-    announce "Now cleaning up unnecessary bashew files ..."
-    delete_stuff template
-    delete_stuff tests/disabled
-    delete_stuff tests/test_bashew.sh
-    delete_stuff tests/test_functions.sh
-    delete_stuff assets
-    delete_stuff .tmp
-    delete_stuff log
-    delete_stuff doc
-    debug "Delete script [bashew.sh] ..."
-    (
-      sleep 1
-      rm -f bashew.sh bashew
-    ) & # delete will happen after the script is finished
-    success "script $new_name created!"
-    success "now do: ${col_ylw}git commit -a -m 'after bashew init' && git push${col_reset}"
-    out "tip: install ${col_ylw}basher${col_reset} and ${col_ylw}pforret/setver${col_reset} for easy bash script version management"
+    do_action2 "$input" "$output"
     ;;
 
-  update)
-    pushd "$script_install_folder" || die "No access to folder [$script_install_folder]"
-    git pull || die "Cannot update with git"
-    # shellcheck disable=SC2164
-    popd
-    ;;
-
-  check | env)
+  check|env)
     ## leave this default action, it will make it easier to test your script
     #TIP: use «$script_prefix check» to check if this script is ready to execute and what values the options/flags are
     #TIP:> $script_prefix check
@@ -271,36 +80,40 @@ main() {
     check_script_settings
     ;;
 
-  \
-    debug)
-    out "print_with_out=yes"
-    debug "print_with_log=yes"
-    announce "print_with_announce=yes"
-    success "print_with_success=yes"
-    progress "print_with_progress=yes"
-    echo ""
-    alert "print_with_alert=yes"
-
-    hash3=$(echo "1234567890" | hash 3)
-    hash6=$(echo "1234567890" | hash)
-    out "hash3=$hash3"
-    out "hash6=$hash6"
-    out "script_basename=$script_basename"
-    out "script_author=$script_author"
-    out "escape1 = $(escape "/forward/slash")"
-    out "escape2 = $(escape '\backward\slash')"
-    out "lowercase = $(lower_case 'AbCdEfGhIjKlMnÔû')"
-    out "uppercase = $(upper_case 'AbCdEfGhIjKlMnÔû')"
-    out "slugify   = $(slugify 'AbCdEfGhIjKlMnÔû')"
-    # shellcheck disable=SC2015
-    is_set "$force" && out "force=$force (true)" || out "force=$force (false)"
+  update)
+    ## leave this default action, it will make it easier to test your script
+    #TIP: use «$script_prefix update» to update to the latest version
+    #TIP:> $script_prefix check
+    update_script_to_latest
     ;;
 
   *)
-    die "param [$action] not recognized"
+    die "action [$action] not recognized"
     ;;
   esac
+  log_to_file "[$script_basename] ended after $SECONDS secs"
+  #TIP: >>> bash script created with «pforret/bashew»
+  #TIP: >>> for bash development, also check out «pforret/setver» and «pforret/progressbar»
 }
+
+#####################################################################
+## Put your helper scripts here
+#####################################################################
+
+do_action1() {
+  log_to_file "action1 [$input]"
+  # Examples of required binaries/scripts and how to install them
+  # require_binary "convert" "imagemagick"
+  # require_binary "progressbar" "basher install pforret/progressbar"
+  # (code)
+}
+
+do_action2() {
+  log_to_file "action2 [$input]"
+  # (code)
+
+}
+
 
 #####################################################################
 ################### DO NOT MODIFY BELOW THIS LINE ###################
@@ -369,19 +182,12 @@ initialise_output() {
   error_prefix="${col_red}>${col_reset}"
 }
 
-out() { ((quiet)) && true || printf '%b\n' "$*"; }
-debug() { if ((verbose)); then out "${col_ylw}# $* ${col_reset}" >&2; else true; fi; }
-die() {
-  out "${col_red}${char_fail} $script_basename${col_reset}: $*" >&2
-  tput bel
-  safe_exit
-}
-alert() { out "${col_red}${char_alrt}${col_reset}: $*" >&2; }
+out() {     ((quiet)) && true || printf '%b\n' "$*"; }
+debug() {   if ((verbose)); then out "${col_ylw}# $* ${col_reset}" >&2; else true; fi; }
+die() {     out "${col_red}${char_fail} $script_basename${col_reset}: $*" >&2 ; tput bel ; safe_exit ; }
+alert() {   out "${col_red}${char_alrt}${col_reset}: $*" >&2 ; }
 success() { out "${col_grn}${char_succ}${col_reset}  $*"; }
-announce() {
-  out "${col_grn}${char_wait}${col_reset}  $*"
-  sleep 1
-}
+announce() { out "${col_grn}${char_wait}${col_reset}  $*"; sleep 1 ; }
 progress() {
   ((quiet)) || (
     local screen_width
@@ -402,20 +208,18 @@ log_to_file() { [[ -n ${log_file:-} ]] && echo "$(date '+%H:%M:%S') | $*" >>"$lo
 ### string processing
 lower_case() { echo "$*" | tr '[:upper:]' '[:lower:]'; }
 upper_case() { echo "$*" | tr '[:lower:]' '[:upper:]'; }
-escape() { echo "$*" | sed 's/\//\\\//g'; }
-is_set() { [[ "$1" -gt 0 ]]; }
 
 slugify() {
-  # slugify <input> <separator>
-  # slugify "Jack, Jill & Clémence LTD"      => jack-jill-clemence-ltd
-  # slugify "Jack, Jill & Clémence LTD" "_"  => jack_jill_clemence_ltd
-  separator="${2:-}"
-  [[ -z "$separator" ]] && separator="-"
-  # shellcheck disable=SC2020
-  echo "$1" |
-    tr '[:upper:]' '[:lower:]' |
-    tr 'àáâäæãåāçćčèéêëēėęîïííīįìłñńôöòóœøōõßśšûüùúūÿžźż' 'aaaaaaaaccceeeeeeeiiiiiiilnnoooooooosssuuuuuyzzz' |
-    awk '{
+    # slugify <input> <separator>
+    # slugify "Jack, Jill & Clémence LTD"      => jack-jill-clemence-ltd
+    # slugify "Jack, Jill & Clémence LTD" "_"  => jack_jill_clemence_ltd
+    separator="${2:-}"
+    [[ -z "$separator" ]] && separator="-"
+    # shellcheck disable=SC2020
+    echo "$1" |
+        tr '[:upper:]' '[:lower:]' |
+        tr 'àáâäæãåāçćčèéêëēėęîïííīįìłñńôöòóœøōõßśšûüùúūÿžźż' 'aaaaaaaaccceeeeeeeiiiiiiilnnoooooooosssuuuuuyzzz' |
+        awk '{
           gsub(/[\[\]@#$%^&*;,.:()<>!?\/+=_]/," ",$0);
           gsub(/^  */,"",$0);
           gsub(/  *$/,"",$0);
@@ -423,27 +227,27 @@ slugify() {
           gsub(/[^a-z0-9\-]/,"");
           print;
           }' |
-    sed "s/-/$separator/g"
+        sed "s/-/$separator/g"
 }
 
 title_case() {
-  # title_case <input> <separator>
-  # title_case "Jack, Jill & Clémence LTD"     => JackJillClemenceLtd
-  # title_case "Jack, Jill & Clémence LTD" "_" => Jack_Jill_Clemence_Ltd
-  separator="${2:-}"
-  # shellcheck disable=SC2020
-  echo "$1" |
-    tr '[:upper:]' '[:lower:]' |
-    tr 'àáâäæãåāçćčèéêëēėęîïííīįìłñńôöòóœøōõßśšûüùúūÿžźż' 'aaaaaaaaccceeeeeeeiiiiiiilnnoooooooosssuuuuuyzzz' |
-    awk '{ gsub(/[\[\]@#$%^&*;,.:()<>!?\/+=_-]/," ",$0); print $0; }' |
-    awk '{
+    # title_case <input> <separator>
+    # title_case "Jack, Jill & Clémence LTD"     => JackJillClemenceLtd
+    # title_case "Jack, Jill & Clémence LTD" "_" => Jack_Jill_Clemence_Ltd
+    separator="${2:-}"
+    # shellcheck disable=SC2020
+    echo "$1" |
+        tr '[:upper:]' '[:lower:]' |
+        tr 'àáâäæãåāçćčèéêëēėęîïííīįìłñńôöòóœøōõßśšûüùúūÿžźż' 'aaaaaaaaccceeeeeeeiiiiiiilnnoooooooosssuuuuuyzzz' |
+        awk '{ gsub(/[\[\]@#$%^&*;,.:()<>!?\/+=_-]/," ",$0); print $0; }' |
+        awk '{
           for (i=1; i<=NF; ++i) {
               $i = toupper(substr($i,1,1)) tolower(substr($i,2))
           };
           print $0;
           }' |
-    sed "s/ /$separator/g" |
-    cut -c1-50
+        sed "s/ /$separator/g" |
+        cut -c1-50
 }
 
 ### interactive
@@ -456,15 +260,17 @@ confirm() {
 }
 
 ask() {
-  # $1 = question
-  # $2 = default value
+  # $1 = variable name
+  # $2 = question
+  # $3 = default value
+  # not using read -i because that doesn't work on MacOS
   local ANSWER
-  if [[ -n "${2:-}" ]]; then
-    read -r -p "$1 ($2) > " ANSWER
+  read -r -p "$2 ($3) > " ANSWER
+  if [[ -z "$ANSWER" ]]; then
+    eval "$1=\"$3\""
   else
-    read -r -p "$1      > " ANSWER
+    eval "$1=\"$ANSWER\""
   fi
-  [[ -n "$ANSWER" ]] && echo "$ANSWER" || echo "${2:-}"
 }
 
 trap "die \"ERROR \$? after \$SECONDS seconds \n\
@@ -485,7 +291,7 @@ flag_set() { [[ "$1" -gt 0 ]]; }
 show_usage() {
   out "Program: ${col_grn}$script_basename $script_version${col_reset} by ${col_ylw}$script_author${col_reset}"
   out "Updated: ${col_grn}$script_modified${col_reset}"
-  out "Description: package_description"
+  out "Description: Resize and watermark photos"
   echo -n "Usage: $script_basename"
   list_options |
     awk '
@@ -526,45 +332,45 @@ show_usage() {
   '
 }
 
-check_last_version() {
+check_last_version(){
   (
-    # shellcheck disable=SC2164
-    pushd "$script_install_folder" &>/dev/null
-    if [[ -d .git ]]; then
-      local remote
-      remote="$(git remote -v | grep fetch | awk 'NR == 1 {print $2}')"
-      progress "Check for latest version - $remote"
-      git remote update &>/dev/null
-      if [[ $(git rev-list --count "HEAD...HEAD@{upstream}" 2>/dev/null) -gt 0 ]]; then
-        out "There is a more recent update of this script - run <<$script_prefix update>> to update"
-      fi
+  # shellcheck disable=SC2164
+  pushd "$script_install_folder" &> /dev/null
+  if [[ -d .git ]] ; then
+    local remote
+    remote="$(git remote -v | grep fetch | awk 'NR == 1 {print $2}')"
+    progress "Check for latest version - $remote"
+    git remote update &> /dev/null
+    if [[ $(git rev-list --count "HEAD...HEAD@{upstream}" 2>/dev/null) -gt 0 ]] ; then
+      out "There is a more recent update of this script - run <<$script_prefix update>> to update"
     fi
-    # shellcheck disable=SC2164
-    popd &>/dev/null
+  fi
+  # shellcheck disable=SC2164
+  popd &> /dev/null
   )
 }
 
-update_script_to_latest() {
+update_script_to_latest(){
   # run in background to avoid problems with modifying a running interpreted script
   (
-    sleep 1
-    cd "$script_install_folder" && git pull
+  sleep 1
+  cd "$script_install_folder" && git pull
   ) &
 }
 
 show_tips() {
   ((sourced)) && return 0
   # shellcheck disable=SC2016
-  grep <"${BASH_SOURCE[0]}" -v '$0' |
-    awk \
+  grep <"${BASH_SOURCE[0]}" -v '$0' \
+  | awk \
       -v green="$col_grn" \
       -v yellow="$col_ylw" \
       -v reset="$col_reset" \
       '
       /TIP: /  {$1=""; gsub(/«/,green); gsub(/»/,reset); print "*" $0}
       /TIP:> / {$1=""; print " " yellow $0 reset}
-      ' |
-    awk \
+      ' \
+  | awk \
       -v script_basename="$script_basename" \
       -v script_prefix="$script_prefix" \
       '{
@@ -576,7 +382,6 @@ show_tips() {
 
 check_script_settings() {
   if [[ -n $(filter_option_type flag) ]]; then
-    local name
     out "## ${col_grn}boolean flags${col_reset}:"
     filter_option_type flag |
       while read -r name; do
@@ -770,21 +575,32 @@ parse_options() {
   fi
 }
 
-require_binary() {
+require_binary(){
   binary="$1"
   path_binary=$(command -v "$binary" 2>/dev/null)
   [[ -n "$path_binary" ]] && debug "️$require_icon required [$binary] -> $path_binary" && return 0
-  #
   words=$(echo "${2:-}" | wc -l)
-  case $words in
-  0) install_instructions="$install_package $1" ;;
-  1) install_instructions="$install_package $2" ;;
-  *) install_instructions="$2" ;;
-  esac
-  alert "$script_basename needs [$binary] but it cannot be found"
-  alert "1) install package  : $install_instructions"
-  alert "2) check path       : export PATH=\"[path of your binary]:\$PATH\""
-  die "Missing program/script [$binary]"
+  if ((force)) ; then
+    announce "Installing $1 ..."
+    case $words in
+      0)  eval "$install_package $1" ;;
+          # require_binary ffmpeg -- binary and package have the same name
+      1)  eval "$install_package $2" ;;
+          # require_binary convert imagemagick -- binary and package have different names
+      *)  eval "${2:-}"
+          # require_binary primitive "go get -u github.com/fogleman/primitive" -- non-standard package manager
+    esac
+  else
+    case $words in
+      0)  install_instructions="$install_package $1" ;;
+      1)  install_instructions="$install_package $2" ;;
+      *)  install_instructions="${2:-}"
+    esac
+    alert "$script_basename needs [$binary] but it cannot be found"
+    alert "1) install package  : $install_instructions"
+    alert "2) check path       : export PATH=\"[path of your binary]:\$PATH\""
+    die   "Missing program/script [$binary]"
+  fi
 }
 
 folder_prep() {
@@ -822,41 +638,38 @@ recursive_readlink() {
 }
 
 lookup_script_data() {
-  script_prefix=$(basename "${BASH_SOURCE[0]}" .sh)
-  script_basename=$(basename "${BASH_SOURCE[0]}")
-  execution_day=$(date "+%Y-%m-%d")
-  execution_year=$(date "+%Y")
+  readonly script_prefix=$(basename "${BASH_SOURCE[0]}" .sh)
+  readonly script_basename=$(basename "${BASH_SOURCE[0]}")
+  readonly execution_day=$(date "+%Y-%m-%d")
+  #readonly execution_year=$(date "+%Y")
 
-  local script_install_path="${BASH_SOURCE[0]}"
+  script_install_path="${BASH_SOURCE[0]}"
   debug "$info_icon Script path: $script_install_path"
   script_install_path=$(recursive_readlink "$script_install_path")
   debug "$info_icon Linked path: $script_install_path"
-  script_install_folder="$(cd -P "$(dirname "$script_install_path")" && pwd)"
+  readonly script_install_folder="$( cd -P "$( dirname "$script_install_path" )" && pwd )"
   debug "$info_icon In folder  : $script_install_folder"
-  local script_hash="?"
-  local script_lines="?"
   if [[ -f "$script_install_path" ]]; then
     script_hash=$(hash <"$script_install_path" 8)
     script_lines=$(awk <"$script_install_path" 'END {print NR}')
+  else
+    # can happen when script is sourced by e.g. bash_unit
+    script_hash="?"
+    script_lines="?"
   fi
 
   # get shell/operating system/versions
-  local shell_brand="sh"
-  local shell_version="?"
+  shell_brand="sh"
+  shell_version="?"
   [[ -n "${ZSH_VERSION:-}" ]] && shell_brand="zsh" && shell_version="$ZSH_VERSION"
   [[ -n "${BASH_VERSION:-}" ]] && shell_brand="bash" && shell_version="$BASH_VERSION"
   [[ -n "${FISH_VERSION:-}" ]] && shell_brand="fish" && shell_version="$FISH_VERSION"
   [[ -n "${KSH_VERSION:-}" ]] && shell_brand="ksh" && shell_version="$KSH_VERSION"
   debug "$info_icon Shell type : $shell_brand - version $shell_version"
 
-  local os_kernel
-  local os_version
-  local os_machine
-  local os_name
-  os_kernel=$(uname -s)
+  readonly os_kernel=$(uname -s)
   os_version=$(uname -r)
   os_machine=$(uname -m)
-  os_name="?"
   install_package=""
   case "$os_kernel" in
   CYGWIN* | MSYS* | MINGW*)
@@ -870,8 +683,8 @@ lookup_script_data() {
   Linux | GNU*)
     if [[ $(command -v lsb_release) ]]; then
       # 'normal' Linux distributions
-      os_name=$(lsb_release -i | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}')    # Ubuntu/Raspbian
-      os_version=$(lsb_release -r | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}') # 20.04
+      os_name=$(lsb_release -i    | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}' ) # Ubuntu/Raspbian
+      os_version=$(lsb_release -r | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}' ) # 20.04
     else
       # Synology, QNAP,
       os_name="Linux"
@@ -904,12 +717,10 @@ lookup_script_data() {
   debug "$info_icon Running as : $USER@$HOSTNAME"
 
   # if run inside a git repo, detect for which remote repo it is
-  local git_repo_remote
-  local git_repo_root
   if git status &>/dev/null; then
-    git_repo_remote=$(git remote -v | awk '/(fetch)/ {print $2}')
+    readonly git_repo_remote=$(git remote -v | awk '/(fetch)/ {print $2}')
     debug "$info_icon git remote : $git_repo_remote"
-    git_repo_root=$(git rev-parse --show-toplevel)
+    readonly git_repo_root=$(git rev-parse --show-toplevel)
     debug "$info_icon git folder : $git_repo_root"
   else
     readonly git_repo_root=""
@@ -944,21 +755,48 @@ import_env_if_any() {
 
   for env_file in "${env_files[@]}"; do
     if [[ -f "$env_file" ]]; then
-      debug "$config_icon Read config from [$env_file]"
+      debug "$config_icon Read  dotenv: [$env_file]"
+      clean_file=$(clean_dotenv "$env_file")
       # shellcheck disable=SC1090
-      source "$env_file"
+      source "$clean_file" && rm "$clean_file"
     fi
   done
+}
+
+clean_dotenv(){
+  local input="$1"
+  local output="$1.__.sh"
+  [[ ! -f "$input" ]] && die "Input file [$input] does not exist"
+  debug "$clean_icon Clean dotenv: [$output]"
+  < "$input" awk '
+      function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+      function rtrim(s) { sub(/[ \t\r\n]+$/, "", s); return s }
+      function trim(s) { return rtrim(ltrim(s)); }
+      /=/ { # skip lines with no equation
+        $0=trim($0);
+        if(substr($0,1,1) != "#"){ # skip comments
+          equal=index($0, "=");
+          key=trim(substr($0,1,equal-1));
+          val=trim(substr($0,equal+1));
+          if(match(val,/^".*"$/) || match(val,/^\047.*\047$/)){
+            print key "=" val
+          } else {
+            print key "=\"" val "\""
+          }
+        }
+      }
+  ' > "$output"
+  echo "$output"
 }
 
 initialise_output  # output settings
 lookup_script_data # find installation folder
 
-[[ $run_as_root == 1 ]] && [[ $UID -ne 0 ]] && die "user is $USER, MUST be root to run [$script_basename]"
+[[ $run_as_root == 1  ]] && [[ $UID -ne 0 ]] && die "user is $USER, MUST be root to run [$script_basename]"
 [[ $run_as_root == -1 ]] && [[ $UID -eq 0 ]] && die "user is $USER, CANNOT be root to run [$script_basename]"
 
-init_options      # set default values for flags & options
-import_env_if_any # overwrite with .env if any
+init_options       # set default values for flags & options
+import_env_if_any  # overwrite with .env if any
 
 if [[ $sourced -eq 0 ]]; then
   parse_options "$@"    # overwrite with specified options if any
