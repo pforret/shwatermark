@@ -8,26 +8,56 @@
 
 # shwatermark
 
-![shwatermark](https://github.com/pforret/splashmark/raw/master/examples/size_github.jpg)
 
 Resize and watermark photos
 
 ## 🔥 Usage
 
 ```
-Program: shwatermark 0.0.1 by peter@forret.com
-Updated: 2021-12-17
+Program: shwatermark 0.1.1 by peter@forret.com
+Updated: Dec 17 22:30:33 2021
 Description: Resize and watermark photos
-Usage: normal.sh [-h] [-q] [-v] [-f] [-l <log_dir>] [-t <tmp_dir>] <action> <input?>
+Usage: shwatermark [-h] [-q] [-v] [-f] [-l <log_dir>] [-t <tmp_dir>] [-i <input>] [-e <output>] [-I <inexts>] [-E <outexts>] [-A <alpha>] [-C <color>] [-F <font>] [-M <mark>] [-O <position>] [-S <size>] [-X <fx>] [-E <email>] [-P <name>] [-S <shoot>] [-T <tags>] [-U <url>] [-p <pixel>] [-q <quality>] <action>
 Flags, options and parameters:
     -h|--help        : [flag] show usage [default: off]
     -q|--quiet       : [flag] no output [default: off]
     -v|--verbose     : [flag] output more [default: off]
     -f|--force       : [flag] do not ask for confirmation (always yes) [default: off]
-    -l|--log_dir <?> : [option] folder for log files   [default: /Users/pforret/log/normal]
-    -t|--tmp_dir <?> : [option] folder for temp files  [default: .tmp]
-    <action>         : [parameter] action to perform: analyze/convert
-    <input>          : [parameter] input file/text (optional)
+    -l|--log_dir <?> : [option] folder for log files   [default: /Users/pforret/log/shwatermark]
+    -t|--tmp_dir <?> : [option] folder for temp files  [default: /tmp/shwatermark]
+    -i|--input <?>   : [option] input folder  [default: .]
+    -e|--output <?>  : [option] output folder  [default: ./export]
+    -I|--inexts <?>  : [option] input extensions  [default: jpg,jpeg,JPG]
+    -E|--outexts <?> : [option] output extensions  [default: jpg]
+    -A|--alpha <?>   : [option] watermark alpha opacity  [default: 80]
+    -C|--color <?>   : [option] watermark color  [default: FFF]
+    -F|--font <?>    : [option] watermark font  [default: Helvetica]
+    -M|--mark <?>    : [option] watermark text  [default: {name}]
+    -O|--position <?>: [option] watermark position  [default: SouthWest]
+    -S|--size <?>    : [option] watermark font size  [default: 20]
+    -X|--fx <?>      : [option] watermark effect  [default: shadow]
+    -E|--email <?>   : [option] email of photographer (EXIF)
+    -P|--name <?>    : [option] name of photographer (EXIF)  [default: pforret]
+    -S|--shoot <?>   : [option] shoot/event name (EXIF)
+    -T|--tags <?>    : [option] shoot/event tags (EXIF)  [default: 2021]
+    -U|--url <?>     : [option] photographer url (EXIF)
+    -p|--pixel <?>   : [option] max pixel dimension  [default: 1600]
+    -q|--quality <?> : [option] export quality %  [default: 95]
+    <action>         : [parameter] action to perform: export/modify
+
+### TIPS & EXAMPLES
+* use shwatermark export to export photos
+  shwatermark export
+* use shwatermark modify to modify photos in place
+  shwatermark modify
+* use shwatermark check to check if this script is ready to execute and what values the options/flags are
+  shwatermark check
+* use shwatermark env to generate an example .env file
+  shwatermark env > .env
+* use shwatermark update to update to the latest version
+  shwatermark check
+* >>> bash script created with pforret/bashew
+* >>> for bash development, also check out pforret/setver and pforret/progressbar
 ```
 
 ## ⚡️ Examples
