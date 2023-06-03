@@ -15,30 +15,27 @@ flag|h|help|show usage
 flag|q|quiet|no output
 flag|v|verbose|output more
 flag|f|force|do not ask for confirmation (always yes)
-option|l|log_dir|folder for log files |$HOME/log/$script_prefix
-option|t|tmp_dir|folder for temp files|/tmp/$script_prefix
 
-option|i|input|input folder|.
-option|e|output|output folder|./export
-option|I|inexts|input extensions|jpg,jpeg,JPG
-option|E|outexts|output extensions|jpg
-
+option|@|email|email of photographer (EXIF)|
 option|A|alpha|watermark alpha opacity|80
 option|C|color|watermark color|FFF
+option|E|extension|output extensions|jpg
 option|F|font|watermark font|Helvetica
+option|I|include|input extensions|jpg,jpeg,JPG
 option|M|mark|watermark text|{name}
 option|O|position|watermark position|SouthWest
-option|S|size|watermark font size|20
-option|X|fx|watermark effect|shadow
-
-option|E|email|email of photographer (EXIF)|
 option|P|name|name of photographer (EXIF)|$username
 option|S|shoot|shoot/event name (EXIF)|
+option|S|size|watermark font size|20
 option|T|tags|shoot/event tags (EXIF)|$default_tags
 option|U|url|photographer url (EXIF)|
-
+option|X|fx|watermark effect|shadow
+option|i|input|input folder|.
+option|l|log_dir|folder for log files |$HOME/log/$script_prefix
+option|o|output|output folder|./export
 option|p|pixel|max pixel dimension|1600
 option|q|quality|export quality %|95
+option|t|tmp_dir|folder for temp files|/tmp/$script_prefix
 param|1|action|action to perform: export/modify
 " | grep -v '^#' | grep -v '^\s*$'
 }
@@ -50,11 +47,11 @@ param|1|action|action to perform: export/modify
 main() {
   log_to_file "[$script_basename] $script_version started"
 
-  action=$(lower_case "$action")
-  case $action in
+  # shellcheck disable=SC2154
+  case ${action,,} in
   export)
     #TIP: use «$script_prefix export» to export photos
-    #TIP:> $script_prefix export
+    #TIP:> $script_prefix -i <folder_in> -o <folder_out> export
     # shellcheck disable=SC2154
     do_export
     ;;

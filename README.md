@@ -6,8 +6,9 @@
 ![GH License](https://img.shields.io/github/license/pforret/shwatermark)
 [![basher install](https://img.shields.io/badge/basher-install-white?logo=gnu-bash&style=flat)](https://basher.gitparade.com/package/)
 
-# shwatermark
+![Under Development](https://img.shields.io/badge/under-development-orange)
 
+# shwatermark
 
 Resize and watermark photos
 
@@ -62,10 +63,6 @@ Flags, options and parameters:
 
 ## ⚡️ Examples
 
-```bash
-> shwatermark .
-# start PhpStorm with current folder as project
-```
 
 ## 🚀 Installation
 
@@ -80,6 +77,7 @@ or with `git`
 
 ## 📝 Acknowledgements
 
+* uses lots of tricks from [PaparazzoMark](https://github.com/pforret/PaparazzoMark)
 * script created with [bashew](https://github.com/pforret/bashew)
 
 &copy; 2021 Peter Forret
