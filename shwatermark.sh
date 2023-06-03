@@ -190,7 +190,7 @@ progress() {
     local rest_of_line
     rest_of_line=$((screen_width - 5))
 
-    if flag_set ${piped:-0}; then
+    if flag_set "${piped:-0}" ; then
       out "$*" >&2
     else
       printf "... %-${rest_of_line}b\r" "$*                                             " >&2
@@ -536,6 +536,7 @@ parse_options() {
   fi
 
   if expects_optional_params; then
+    local optional_params optional_count
     optional_params=$(list_options | grep 'param|?|' | cut -d'|' -f3)
     optional_count=$(echo "$optional_params" | count_words)
     debug "$config_icon Expect : $optional_count optional parameter(s): $(echo "$optional_params" | xargs)"
@@ -553,6 +554,7 @@ parse_options() {
 
   if expects_multi_param; then
     #debug "Process: multi param"
+    local multi_param multi_count
     multi_count=$(list_options | grep -c 'param|n|')
     multi_param=$(list_options | grep 'param|n|' | cut -d'|' -f3)
     debug "$config_icon Expect : $multi_count multi parameter: $multi_param"
@@ -571,6 +573,7 @@ parse_options() {
 }
 
 require_binary(){
+  local binary path_binary words install_instructions
   binary="$1"
   path_binary=$(command -v "$binary" 2>/dev/null)
   [[ -n "$path_binary" ]] && debug "️$require_icon required [$binary] -> $path_binary" && return 0
@@ -633,8 +636,11 @@ recursive_readlink() {
 }
 
 lookup_script_data() {
+  # shellcheck disable=SC2155
   readonly script_prefix=$(basename "${BASH_SOURCE[0]}" .sh)
+  # shellcheck disable=SC2155
   readonly script_basename=$(basename "${BASH_SOURCE[0]}")
+  # shellcheck disable=SC2155
   readonly execution_day=$(date "+%Y-%m-%d")
   #readonly execution_year=$(date "+%Y")
 
@@ -642,8 +648,10 @@ lookup_script_data() {
   debug "$info_icon Script path: $script_install_path"
   script_install_path=$(recursive_readlink "$script_install_path")
   debug "$info_icon Linked path: $script_install_path"
+  # shellcheck disable=SC2155
   readonly script_install_folder="$( cd -P "$( dirname "$script_install_path" )" && pwd )"
   debug "$info_icon In folder  : $script_install_folder"
+  local script_hash script_lines
   if [[ -f "$script_install_path" ]]; then
     script_hash=$(hash <"$script_install_path" 8)
     script_lines=$(awk <"$script_install_path" 'END {print NR}')
@@ -660,17 +668,20 @@ lookup_script_data() {
   [[ -n "${BASH_VERSION:-}" ]] && shell_brand="bash" && shell_version="$BASH_VERSION"
   [[ -n "${FISH_VERSION:-}" ]] && shell_brand="fish" && shell_version="$FISH_VERSION"
   [[ -n "${KSH_VERSION:-}" ]] && shell_brand="ksh" && shell_version="$KSH_VERSION"
-  debug "$info_icon Shell type : $shell_brand - version $shell_version"
+  debug "$info_icon shell type : $shell_brand - version $shell_version"
 
-  readonly os_kernel=$(uname -s)
-  os_version=$(uname -r)
-  os_machine=$(uname -m)
+  # shellcheck disable=SC2155
   install_package=""
+  local os_kernel
+  os_kernel=$(uname -s)
   case "$os_kernel" in
   CYGWIN* | MSYS* | MINGW*)
+    os_machine=$(uname -m)
     os_name="Windows"
+    os_version=$(uname -r)
     ;;
   Darwin)
+    os_machine=$(uname -m)
     os_name=$(sw_vers -productName)       # macOS
     os_version=$(sw_vers -productVersion) # 11.1
     install_package="brew install"
@@ -678,12 +689,15 @@ lookup_script_data() {
   Linux | GNU*)
     if [[ $(command -v lsb_release) ]]; then
       # 'normal' Linux distributions
+      os_machine=$(uname -m)
       os_name=$(lsb_release -i    | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}' ) # Ubuntu/Raspbian
       os_version=$(lsb_release -r | awk -F: '{$1=""; gsub(/^[\s\t]+/,"",$2); gsub(/[\s\t]+$/,"",$2); print $2}' ) # 20.04
     else
       # Synology, QNAP,
+      os_machine=$(uname -m)
       os_name="Linux"
-    fi
+     os_version=$(uname -r)
+   fi
     [[ -x /bin/apt-cyg ]] && install_package="apt-cyg install"     # Cygwin
     [[ -x /bin/dpkg ]] && install_package="dpkg -i"                # Synology
     [[ -x /opt/bin/ipkg ]] && install_package="ipkg install"       # Synology
@@ -713,9 +727,10 @@ lookup_script_data() {
 
   # if run inside a git repo, detect for which remote repo it is
   if git status &>/dev/null; then
-    readonly git_repo_remote=$(git remote -v | awk '/(fetch)/ {print $2}')
+    local git_repo_remote git_repo_root
+    git_repo_remote=$(git remote -v | awk '/(fetch)/ {print $2}')
     debug "$info_icon git remote : $git_repo_remote"
-    readonly git_repo_root=$(git rev-parse --show-toplevel)
+    git_repo_root=$(git rev-parse --show-toplevel)
     debug "$info_icon git folder : $git_repo_root"
   else
     readonly git_repo_root=""
